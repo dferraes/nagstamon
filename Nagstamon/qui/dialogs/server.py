@@ -58,8 +58,6 @@ class DialogServer(Dialog):
 
     def __init__(self):
         Dialog.__init__(self, 'settings_server')
-        # file chooser Dialog
-        self.file_chooser = QFileDialog()
         # configuration for server
         self.server_conf = None
         # define checkbox-to-widgets dependencies which apply at initialization
@@ -475,9 +473,12 @@ class DialogServer(Dialog):
         show dialog for selection of non-default browser
         """
         file_filter = 'All files (*)'
-        file = self.file_chooser.getOpenFileName(self.window,
-                                                    directory=os.path.expanduser('~'),
-                                                    filter=file_filter)[0]
+        # do not use the native KDE dialog - its KIO jobs post a spurious Quit
+        # event when finishing, which shuts down the whole application on Plasma
+        file = QFileDialog.getOpenFileName(self.window,
+                                           directory=os.path.expanduser('~'),
+                                           filter=file_filter,
+                                           options=QFileDialog.Option.DontUseNativeDialog)[0]
 
         # only take filename if QFileDialog gave something useful back
         if file != '':

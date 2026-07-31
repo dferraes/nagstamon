@@ -121,6 +121,9 @@ class StatusWindow(QWidget):
     stored_height = 0
     stored_width = 0
 
+    # flag to avoid running the shutdown procedure twice (e.g. closeEvent after exit)
+    exiting = False
+
     def __init__(self, dialogs=None, systrayicon=None):
         """
         Status window combined from status bar and popup window
@@ -1208,7 +1211,10 @@ class StatusWindow(QWidget):
         """
         # check first if popup has to be shown by hovering or clicking
         if conf.windowed:
-            exit()
+            # use clean shutdown path which stops all worker threads -
+            # the builtin exit() would raise SystemExit inside the event loop
+            # and leave QThreads running, crashing Qt at interpreter exit
+            self.exit()
 
     def get_real_width(self):
         """
@@ -1399,6 +1405,12 @@ class StatusWindow(QWidget):
         """
         stop all child threads before quitting instance
         """
+        # avoid running shutdown twice - e.g. if closeEvent or a signal handler
+        # triggers exit() again while threads are still being waited on
+        if self.exiting:
+            return
+        self.exiting = True
+
         # store position of statuswindow/statusbar
         self.save_position_to_conf()
 
@@ -1412,8 +1424,10 @@ class StatusWindow(QWidget):
         self.worker.finish.emit()
         self.worker_notification.finish.emit()
 
-        # tell all treeview threads to stop
+        # tell all treeview threads to stop - clear running flag first so workers
+        # do not reschedule their timer into an already quitting event loop
         for server_vbox in self.servers_vbox.children():
+            server_vbox.table.worker.running = False
             server_vbox.table.worker.finish.emit()
 
         app.exit()

@@ -18,7 +18,8 @@ from copy import deepcopy
 from datetime import datetime
 from subprocess import Popen
 from sys import stdout
-from traceback import print_exc
+from traceback import (format_exc,
+                       print_exc)
 from urllib.parse import quote
 
 from Nagstamon.config import conf
@@ -72,6 +73,7 @@ except AttributeError:
 from Nagstamon.qui.widgets.app import app
 from Nagstamon.qui.widgets.menu import MenuAtCursor
 from Nagstamon.qui.widgets.model import Model
+from Nagstamon.objects import Result
 from Nagstamon.servers import SERVER_TYPES, servers
 
 
@@ -1126,7 +1128,12 @@ class TreeView(QTreeView):
                     # reflect status retrieval attempt on server vbox label
                     self.change_label_status.emit('Refreshing...', '')
 
-                    status = self.server.get_status()
+                    # last-resort guard: PyQt6 aborts the whole application on
+                    # unhandled exceptions in slots, so no server bug may escape here
+                    try:
+                        status = self.server.get_status()
+                    except Exception:
+                        status = Result(result='ERROR', error=format_exc())
 
                     # all is OK if no error info came back
                     if self.server.status_description == '' and \

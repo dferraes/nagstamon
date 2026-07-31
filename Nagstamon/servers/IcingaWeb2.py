@@ -105,7 +105,8 @@ class IcingaWeb2Server(GenericServer):
                     form_inputs = {}
                     for form_input in ('redirect', 'formUID', 'CSRFToken', 'btn_submit'):
                         if form is not None and not form.find('input', {'name': form_input}) is None:
-                            form_inputs[form_input] = form.find('input', {'name': form_input})['value']
+                            # use .get() because some login pages provide input elements without value attribute
+                            form_inputs[form_input] = form.find('input', {'name': form_input}).get('value', '')
                         else:
                             form_inputs[form_input] = ''
                     form_inputs['username'] = self.username

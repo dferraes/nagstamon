@@ -102,8 +102,6 @@ class DialogSettings(Dialog):
 
     def __init__(self):
         Dialog.__init__(self, 'settings_main')
-        # file chooser Dialog
-        self.file_chooser = QFileDialog()
         # define checkbox-to-widgets dependencies which apply at initialization
         # which widgets have to be hidden because of irrelevance
         # dictionary holds checkbox/radiobutton as key and relevant widgets in a list
@@ -734,10 +732,13 @@ class DialogSettings(Dialog):
             widget = self.window.__dict__['input_lineedit_notification_custom_sound_%s' % self.sound_file_type]
 
             # use 2 filters, sound files and all files
-            file = self.file_chooser.getOpenFileName(self.window,
-                                                        filter='Sound files (*.mp3 *.MP3 *.mp4 *.MP4 '
-                                                               '*.wav *.WAV *.ogg *.OGG);;'
-                                                               'All files (*)')[0]
+            # do not use the native KDE dialog - its KIO jobs post a spurious Quit
+            # event when finishing, which shuts down the whole application on Plasma
+            file = QFileDialog.getOpenFileName(self.window,
+                                               filter='Sound files (*.mp3 *.MP3 *.mp4 *.MP4 '
+                                                      '*.wav *.WAV *.ogg *.OGG);;'
+                                                      'All files (*)',
+                                               options=QFileDialog.Option.DontUseNativeDialog)[0]
 
             # only take filename if QFileDialog gave something useful back
             if file != '':
@@ -988,9 +989,12 @@ class DialogSettings(Dialog):
             file_filter = ''
             directory = '/usr/bin'
 
-        file = self.file_chooser.getOpenFileName(self.window,
-                                                    directory=directory,
-                                                    filter=file_filter)[0]
+        # do not use the native KDE dialog - its KIO jobs post a spurious Quit
+        # event when finishing, which shuts down the whole application on Plasma
+        file = QFileDialog.getOpenFileName(self.window,
+                                           directory=directory,
+                                           filter=file_filter,
+                                           options=QFileDialog.Option.DontUseNativeDialog)[0]
 
         # only take filename if QFileDialog gave something useful back
         if file != '':

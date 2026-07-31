@@ -952,11 +952,17 @@ class GenericServer:
             self.isChecking = False
             return Result()
 
-        # initialize HTTP first
-        self.init_http()
-
-        # get all trouble hosts/services from server specific _get_status()
-        status = self._get_status()
+        # initialize HTTP first - catch errors here as well because exceptions
+        # escaping into the calling Qt slot would abort the whole application
+        # (PyQt6 kills the process on unhandled slot exceptions)
+        try:
+            self.init_http()
+            # get all trouble hosts/services from server specific _get_status()
+            status = self._get_status()
+        except Exception:
+            self.isChecking = False
+            result, error = self.error(sys.exc_info())
+            return Result(result=result, error=error)
 
         if status is not None:
             self.status = status.result
@@ -993,10 +999,17 @@ class GenericServer:
                 if conf.servers[self.name].enabled is True:
                     # needed to get valid credentials
                     self.refresh_authentication = True
-                    # clean existent authentication
-                    self.reset_http()
-                    self.init_http()
-                    status = self._get_status()
+                    # clean existent authentication - catch errors here as well because
+                    # exceptions escaping into the calling Qt slot would abort the whole
+                    # application (PyQt6 kills the process on unhandled slot exceptions)
+                    try:
+                        self.reset_http()
+                        self.init_http()
+                        status = self._get_status()
+                    except Exception:
+                        self.isChecking = False
+                        result, error = self.error(sys.exc_info())
+                        return Result(result=result, error=error)
                     self.status = status.result
                     self.status_description = status.error
                     self.status_code = status.status_code

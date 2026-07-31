@@ -16,7 +16,8 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 
 from Nagstamon.config import AppInfo
-from Nagstamon.qui.qt import (QMessageBox,
+from Nagstamon.qui.qt import (QApplication,
+                              QMessageBox,
                               QObject,
                               Qt,
                               QThread,
@@ -32,6 +33,9 @@ class CheckVersion(QObject):
     """
 
     is_checking = False
+
+    # keep reference to worker thread so it can be stopped at application exit
+    worker_thread = None
 
     version_info_retrieved = Signal()
 
@@ -70,7 +74,23 @@ class CheckVersion(QObject):
             self.worker.moveToThread(self.worker_thread)
             # run check when thread starts
             self.worker_thread.started.connect(self.worker.check)
+
+            # make sure thread is stopped when application quits - otherwise Qt aborts
+            # with "QThread: Destroyed while thread is still running" at interpreter exit
+            QApplication.instance().aboutToQuit.connect(self.finish_worker_thread)
+
             self.worker_thread.start(QThread.Priority.LowestPriority)
+
+    @Slot()
+    def finish_worker_thread(self):
+        """
+        attempt to shut down thread cleanly at application exit
+        """
+        if self.worker_thread is not None and self.worker_thread.isRunning():
+            # tell thread to quit
+            self.worker_thread.quit()
+            # wait until thread is really stopped
+            self.worker_thread.wait()
 
     @Slot()
     def reset_checking(self):

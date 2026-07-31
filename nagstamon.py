@@ -19,6 +19,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 
 import importlib.util
+import signal
 import sys
 import socket
 
@@ -60,8 +61,21 @@ try:
         if conf.check_for_new_version is True:
             check_version.check(start_mode=True, parent=statuswindow)
 
-        sys.exit(app.exec())
+        # shut down cleanly on SIGTERM/SIGINT (session logout, kill, Ctrl+C) -
+        # defer to the Qt event loop so all worker threads get stopped properly
+        # instead of letting Qt abort on running QThreads at interpreter exit
+        from Nagstamon.qui.qt import QTimer
+        signal.signal(signal.SIGTERM, lambda signum, frame: QTimer.singleShot(0, statuswindow.exit))
+        signal.signal(signal.SIGINT, lambda signum, frame: QTimer.singleShot(0, statuswindow.exit))
 
+        # the Qt event loop does not poll Python's signal wakeup channel, so without
+        # a periodic wake-up pending signal handlers would never run - this no-op
+        # timer gives the interpreter a regular chance to process them
+        signal_timer = QTimer()
+        signal_timer.timeout.connect(lambda: None)
+        signal_timer.start(500)
+
+        sys.exit(app.exec())
 except Exception as err:
     import traceback
     traceback.print_exc(file=sys.stdout)
