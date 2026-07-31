@@ -29,4 +29,11 @@ Successfully tested monitors include:
  - SNAG-View3 - experimental
  - LibreNMS - experimental
 
+Notes on Icinga server types: use *IcingaWeb2* if your Icinga Web 2 uses the classic
+*monitoring* module, and *IcingaDBWeb* if it uses the *icingadb-web* module (Icinga DB).
+*Icinga2API* talks to the Icinga 2 API directly (port 5665) without Icinga Web.
+
+Keep in mind that the status window only shows hosts and services with problems -
+an empty status window with a green icon means everything is OK, not a malfunction.
+
 See https://nagstamon.de for further information.

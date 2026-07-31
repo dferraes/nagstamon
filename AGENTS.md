@@ -41,7 +41,8 @@ Each monitoring system extends `GenericServer` (`Nagstamon/servers/Generic.py`).
 
 **Key patterns:**
 - Server config is accessed via `conf.servers[self.get_name()]`; defaults are set in the server class `__init__()`.
-- Catch exceptions in `get_status()` and return `Result(result=..., error=...)` for graceful degradation.
+- Catch exceptions in `get_status()` and return `Result(result=..., error=...)` for graceful degradation. When catching at a higher level (`GenericServer.get_status()`, treeview worker), also set `self.status`/`self.status_description` — otherwise the GUI treats the failure as "everything is OK" (green icon, empty window, no visible error).
+- Login forms (IcingaWeb2, IcingaDBWeb, Centreon): do not hardcode expected form fields. Collect all hidden inputs plus the submit button generically — newer Icinga Web 2 versions added a mandatory hidden `uid` field and renamed the submit button to `submit_login`, and some inputs have no `value` attribute (use `.get('value', '')`).
 - Some servers proxy to a real implementation after version detection (e.g. `Centreon/__init__.py` switches between `CentreonLegacy` and `CentreonModern`); Alertmanager (`Alertmanager/alertmanagerserver.py`) is a JSON REST API with configurable `map_to_*` fields.
 - Logging goes through `self.debug(server=name, debug=msg)`, routed to `debug_queue` when debug mode is on.
 
@@ -118,10 +119,21 @@ There are no GUI-level tests. When changing server status parsing, run the smoke
 
 ## Debugging Tips
 
-1. Enable debug mode in the settings (or `conf.debug_mode`) to see per-server refresh logs.
-2. Config lives in `nagstamon.conf` under the platform config dir (server URLs, credentials — may use the OS keyring).
+1. Enable debug mode in the settings (or `conf.debug_mode`) to see per-server refresh logs; `debug_to_file` + `debug_file` write them to disk.
+2. Config lives in `nagstamon.conf` under the platform config dir (server URLs, credentials — may use the OS keyring). Per-server files live in `<configdir>/servers/server_<name>.conf`.
 3. Quick import check for a server module: `python3 -c "import Nagstamon.servers.YourServer; print('OK')"`.
 4. GUI debugging requires a running Qt event loop and a display; print/debug-queue logging is more reliable than breakpoints.
+5. Test a server end-to-end without the GUI (uses the real config and credentials):
+   ```python
+   import sys; sys.argv = ['nagstamon']
+   from Nagstamon.config import conf
+   from Nagstamon.servers import create_server
+   srv = create_server(conf.servers['NAME'])
+   srv.init_config()          # required - normally called by the treeview worker
+   status = srv.get_status()
+   print(srv.status, srv.status_code, srv.status_description)
+   ```
+6. PyQt6 aborts (SIGABRT) carry the Python traceback in the `qFatal` message; find it with gdb: `gdb -batch -ex 'set breakpoint pending on' -ex 'break QMessageLogger::fatal' -ex run -ex 'x/s $rdx' --args python3 nagstamon.py`. Spurious `QEvent::Quit` posters can be traced by breaking on `QCoreApplication::postEvent` with condition `*(short*)($rsi+8) == 20`.
 
 ## Security Considerations
 

@@ -9,7 +9,8 @@ read it first and keep both files in sync when conventions change. It covers:
 - How to add a monitoring system (`Nagstamon/servers/`, `register_server()`)
 - Build, run and test commands (`python3 -m pytest tests/`, `build/arch/PKGBUILD`)
 - Important conventions, including the Qt6/KF6 pitfalls:
-  - PyQt6 aborts the process on unhandled slot exceptions — return `Result(result=..., error=...)` instead of raising in server code
+  - PyQt6 aborts the process on unhandled slot exceptions — return `Result(result=..., error=...)` instead of raising in server code, and set `status`/`status_description` on the server object so failures are visible in the GUI instead of looking like "all OK"
   - QThreads must be stopped cleanly before exit (`running = False` + `finish` + `quit()`/`wait()`)
   - never use the native KDE `QFileDialog` (its KIO jobs post a spurious `QEvent::Quit`) — use static `getOpenFileName(..., DontUseNativeDialog)`
+  - login forms (IcingaWeb2/IcingaDBWeb): collect hidden inputs and the submit button generically; newer Icinga Web 2 requires the hidden `uid` field and `submit_login` button
 - Renovate (`renovate.json`) handles dependency updates for `build/requirements/*.txt`, GitHub Actions and Docker base images
