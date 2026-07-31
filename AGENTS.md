@@ -12,7 +12,7 @@ Nagstamon is a cross-platform PyQt6/Qt5 desktop monitoring application (GPL-2.0)
 - `renovate.json` — Renovate configuration (weekly schedule) covering `build/requirements/*.txt` (pip), GitHub Actions and `build/docker/` base images; PyQt6 packages are grouped into one PR. Requires the Renovate GitHub App (or self-hosted runner) to be enabled for the repository.
 
 **Source tree:**
-- `nagstamon.py` — entry point (~67 lines). Injects `truststore` into SSL early, acquires a single-instance lock via `lock_config_folder(conf.configdir)`, then starts the Qt app.
+- `nagstamon.py` — entry point (~80 lines). Injects `truststore` into SSL early, acquires a single-instance lock via `lock_config_folder(conf.configdir)`, installs SIGTERM/SIGINT handlers that defer to `statuswindow.exit()` via `QTimer.singleShot` (plus a periodic no-op `QTimer` so Python signal handlers run inside the Qt loop), then starts the Qt app.
 - `Nagstamon/config.py` (~1250 lines) — `AppInfo` (NAME, VERSION), OS/desktop detection (`OS`, `OS_WINDOWS`, `OS_MACOS`, `DESKTOP_WAYLAND`, `DESKTOP_NEEDS_FIX`), and the global `conf` singleton holding all settings (servers, filters, notification, colors...).
 - `Nagstamon/servers/` — one module per monitoring system plus `Generic.py` (~1800 lines), the base class with HTTP/session handling, status aggregation and actions.
 - `Nagstamon/objects.py` — `GenericHost` / `GenericService` domain models that unify data from all server types.
