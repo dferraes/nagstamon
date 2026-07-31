@@ -3,6 +3,8 @@
   "extends": [
     "config:recommended"
   ],
+  "forkProcessing": "enabled",
+  "dependencyDashboard": true,
   "timezone": "America/Mexico_City",
   "schedule": [
     "before 6am on Monday"
