@@ -1,0 +1,54 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "timezone": "America/Mexico_City",
+  "schedule": [
+    "before 6am on Monday"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "pip_requirements": {
+    "fileMatch": [
+      "^build/requirements/.*\\.txt$"
+    ]
+  },
+  "packageRules": [
+    {
+      "description": "Group PyQt6 packages - they have to be updated together",
+      "matchManagers": [
+        "pip_requirements"
+      ],
+      "matchPackagePatterns": [
+        "^pyqt6"
+      ],
+      "groupName": "PyQt6"
+    },
+    {
+      "description": "keyring is pinned on macOS due to problems since 24.x - propose but do not automerge",
+      "matchManagers": [
+        "pip_requirements"
+      ],
+      "matchPackageNames": [
+        "keyring"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "GitHub Actions updates",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "groupName": "GitHub Actions"
+    },
+    {
+      "description": "Docker base images used for release builds",
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "groupName": "Docker base images"
+    }
+  ]
+}

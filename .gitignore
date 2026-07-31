@@ -15,6 +15,11 @@ __pycache__/
 *.zip
 *~
 build/bdist*
+build/lib/
+build/scripts-*/
+build/arch/pkg/
+build/arch/src/
+build/arch/*.pkg.tar.zst
 dist/
 nagstamon
 nagstamon.egg-info/

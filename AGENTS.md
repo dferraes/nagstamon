@@ -1,132 +1,131 @@
 # Contributing as an AI Agent to Nagstamon
 
-Nagstamon is a cross-platform PyQt6/Qt5 desktop monitoring application that aggregates status from 20+ monitoring systems (Nagios, Icinga, Zabbix, Prometheus, etc.). This guide helps AI agents understand the codebase structure and development workflows.
+Nagstamon is a cross-platform PyQt6/Qt5 desktop monitoring application (GPL-2.0) that aggregates status from 20+ monitoring systems (Nagios, Icinga, Zabbix, Prometheus, Alertmanager, Centreon, Checkmk, Thruk, etc.). It sits in the systray or floats as a statusbar and shows host/service problems in realtime. This guide helps AI agents understand the codebase structure and development workflows.
 
-## Architecture Overview
+## Project Overview & Layout
 
-**Three-tier structure:**
-1. **Configuration Layer** (`Nagstamon/config.py`): Central settings hub, loaded once at startup. Manages cross-platform specifics (Linux/macOS/Windows, desktop environments, Wayland).
-2. **Server Plugin System** (`Nagstamon/servers/`): Each monitoring system (Nagios, Icinga, Zabbix, etc.) extends `GenericServer`. Uses dynamic registration pattern via `SERVER_TYPES` dict and `register_server()`.
-3. **PyQt6 GUI Layer** (`Nagstamon/qui/`): Qt widgets, dialogs, system tray integration. Imports gui modules cause Qt initialization—avoid in non-gui code.
+**Key configuration files:**
+- `setup.py` — the only packaging manifest (setuptools; **there is no `pyproject.toml`**). Handles RPM builds (`bdist_rpm`) with per-distro dependency lists (Qt5 for Fedora < 36 / RHEL ≤ 9, Qt6 otherwise), desktop file, manpage and icon installation.
+- `build/requirements/{linux,macos,windows}.txt` — pip dependencies per platform (PyQt6, requests, keyring, beautifulsoup4, lxml, arrow, psutil, pysocks, requests-kerberos, requests-ecp, truststore, tzlocal, dbus-python on Linux).
+- `.pylintrc` — disables all R, C and W messages; effectively only errors/fatals are enforced.
+- `.github/workflows/` — `build-release-latest.yml`, `build-release-stable.yml` (per-platform release builds) and `codeql.yml`.
+- `renovate.json` — Renovate configuration (weekly schedule) covering `build/requirements/*.txt` (pip), GitHub Actions and `build/docker/` base images; PyQt6 packages are grouped into one PR. Requires the Renovate GitHub App (or self-hosted runner) to be enabled for the repository.
 
-**Data Flow:**
-- `nagstamon.py` (entry point) → `Nagstamon.qui` (GUI app) → `Nagstamon.servers` (status fetching)
-- Configuration flows from `config.py` to all server instances
-- Status objects (`GenericHost`, `GenericService` in `objects.py`) unify data from all server types
+**Source tree:**
+- `nagstamon.py` — entry point (~67 lines). Injects `truststore` into SSL early, acquires a single-instance lock via `lock_config_folder(conf.configdir)`, then starts the Qt app.
+- `Nagstamon/config.py` (~1250 lines) — `AppInfo` (NAME, VERSION), OS/desktop detection (`OS`, `OS_WINDOWS`, `OS_MACOS`, `DESKTOP_WAYLAND`, `DESKTOP_NEEDS_FIX`), and the global `conf` singleton holding all settings (servers, filters, notification, colors...).
+- `Nagstamon/servers/` — one module per monitoring system plus `Generic.py` (~1800 lines), the base class with HTTP/session handling, status aggregation and actions.
+- `Nagstamon/objects.py` — `GenericHost` / `GenericService` domain models that unify data from all server types.
+- `Nagstamon/helpers.py` — `STATES` constant, regex filtering, distro detection, config-folder locking, misc utilities.
+- `Nagstamon/qui/` — PyQt6 GUI layer: `widgets/` (statuswindow, treeview, systray icon, mediaplayer...), `dialogs/` (server, settings, acknowledge, downtime, actions...), `qt.py` (Qt5/Qt6 abstraction), `dbus.py`.
+- `Nagstamon/thirdparty/` — vendored libs: `Xlib`, `ewmh.py` (window management on X11), `sensu_api.py`, `sensugo_api.py`, `zenoss_api.py`.
+- `Nagstamon/resources/` — icons, sounds, SVG templates, desktop/appdata/manpage files.
+- `build/` — `build.py` (release packaging entry point) plus per-platform assets: `debian/`, `redhat/`, `arch/` (PKGBUILD for local Arch builds), `windows/` (InnoSetup), `macos/` (PyInstaller spec), `docker/`.
+- `tests/` — smoke tests + Alertmanager unit tests (see Testing).
 
-## Server Integration Pattern
+**Data flow:** `nagstamon.py` → `Nagstamon.qui` (Qt app, systray, status window) → `Nagstamon.servers` (worker threads fetch status) → results aggregated into `GenericHost`/`GenericService` objects → rendered by the GUI. Configuration flows from the `conf` singleton in `config.py` to all server instances.
 
-**Adding a new monitoring system requires:**
+## Server Plugin System
 
-1. Create `Nagstamon/servers/YourServer.py` extending `GenericServer`
-2. Register in `Nagstamon/servers/__init__.py` by adding to `servers_list` and importing
-3. Implement core methods:
-   - `init_http()`: Initialize session headers/auth
-   - `get_status()`: Fetch and parse status, populate `self.hosts` and `self.services`
-   - `_set_recheck()`, `_acknowledge()`: Actions (optional)
+Each monitoring system extends `GenericServer` (`Nagstamon/servers/Generic.py`). Registered server types (see imports in `Nagstamon/servers/__init__.py`): Nagios, Centreon, Icinga, IcingaWeb2, IcingaDBWeb(+Notifications), Icinga2API, Multisite (Checkmk), op5Monitor, Opsview, Thruk, Zabbix, ZabbixProblemBased, Livestatus, Zenoss, Monitos3, Monitos4x, SnagView3, Sensu, SensuGo, Prometheus, Alertmanager, LibreNMS.
+
+**Adding a new monitoring system:**
+
+1. Create `Nagstamon/servers/YourServer.py` with a class extending `GenericServer` and a unique `TYPE` class attribute.
+2. Import it and call `register_server()` in `Nagstamon/servers/__init__.py`; also hook it into `create_server()` (`Nagstamon/servers/__init__.py:137`).
+3. Implement at minimum:
+   - `init_http()`: session headers/auth setup (use `self.session` from `GenericServer`).
+   - `get_status()`: fetch and parse status; populate `self.hosts` and `self.services` dicts keyed by name with `GenericHost`/`GenericService` objects using standard fields (`name`, `status`, `status_information`, `acknowledged`, `scheduled_downtime`, `flapping`).
+   - Optionally `_set_recheck()`, `_acknowledge()`, `_set_downtime()` for actions.
+4. Add config widgets in `Nagstamon/qui/dialogs/server.py` `VOLATILE_WIDGETS` (dict of widget → server types; controls which fields are shown/hidden per type).
 
 **Key patterns:**
-- Server configuration accessed via `conf.servers[self.get_name()]`
-- Use `self.session` (from `GenericServer`) for HTTP; add headers in `init_http()`
-- Status parsing stores result in `self.hosts` and `self.services` dicts (keyed by host/service name)
-- Parse into `GenericHost`/`GenericService` objects with standard fields: `name`, `status` ('UP'/'DOWN'/'OK'/'CRITICAL'/etc.), `status_information`, `acknowledged`, `scheduled_downtime`, `flapping`
-
-**Examples:**
-- `Nagios.py`: Classic CGI API parsing
-- `Centreon/__init__.py`: Proxy pattern (detects version, switches to `CentreonLegacy` or `CentreonModern`)
-- `Alertmanager/alertmanagerserver.py`: JSON REST API with custom mapping fields (`map_to_hostname`, `map_to_status`)
-
-## Testing Pattern
-
-**Three test strategies** (see `tests/test_smoke.py`):
-
-1. **Non-GUI modules** (config, servers, helpers): Full import via `importlib` - catches all runtime errors
-2. **GUI modules** (Nagstamon/qui/**): Syntax-only via `py_compile` - requires display/Qt, skipped in headless CI
-3. **Vendored Xlib**: Syntax-only (avoid version mismatch errors with system python-xlib)
-
-**Run tests:**
-```bash
-python -m pytest tests/
-```
-
-## Configuration & Cross-Platform Handling
-
-**Key config patterns:**
-- Multiple config folder support (`conf.configdir`, `nagstamon.conf`, `nagstamon2.conf/`)
-- OS detection: `from Nagstamon.config import OS, OS_WINDOWS, OS_MACOS`
-- Desktop environment handling: `DESKTOP_WAYLAND`, `DESKTOP_NEEDS_FIX` for quirky desktops
-- Keyring support (optional, disabled on some KDE+Ubuntu combos to avoid segfaults)
-
-**Configuration object** (`conf` singleton from `config.py`):
-- `conf.servers` (OrderedDict of server configs)
-- `conf.debug_mode` (debug logging)
-- `conf.update_interval_seconds` (polling frequency)
-- Authentication state and SSL/TLS per server
-
-## Build System
-
-**Multi-platform builds** (see `build/build.py`):
-- **Windows**: PyInstaller → exe (optional code signing)
-- **macOS**: PyInstaller → app bundle or DMG
-- **Linux**: 
-  - Debian/Ubuntu via `setup.py` + debuild
-  - RPM via `setup.py bdist_rpm`
-  - DockerFiles for multiple distros (Fedora 41-45, RHEL 9, Debian)
-
-**Dependencies** managed platform-specifically:
-- Qt6 preferred on newer systems; Qt5 fallback on older Fedora/RHEL
-- Check `build/requirements/{linux,macos,windows}.txt`
-
-## Common Development Tasks
-
-**Running locally:**
-```bash
-python nagstamon.py
-```
-
-**Debugging GUI issues:**
-- GUI requires display; use `--help` to check environment
-- Set `conf.debug_mode = True` in config for server debug output
-
-**Modifying server status parsing:**
-- Edit `get_status()` method
-- Test via smoke tests: `python -m pytest tests/test_smoke.py`
-- Populate `self.hosts` and `self.services` with correct status strings from `helpers.STATES`
-
-**Adding server config options:**
-- Add to server class via `__init__()` defaults
-- Add UI widget in `Nagstamon/qui/dialogs/server.py` `VOLATILE_WIDGETS` dict (shown/hidden per server type)
-- Persist via `create_server()` in `servers/__init__.py`
+- Server config is accessed via `conf.servers[self.get_name()]`; defaults are set in the server class `__init__()`.
+- Catch exceptions in `get_status()` and return `Result(result=..., error=...)` for graceful degradation.
+- Some servers proxy to a real implementation after version detection (e.g. `Centreon/__init__.py` switches between `CentreonLegacy` and `CentreonModern`); Alertmanager (`Alertmanager/alertmanagerserver.py`) is a JSON REST API with configurable `map_to_*` fields.
+- Logging goes through `self.debug(server=name, debug=msg)`, routed to `debug_queue` when debug mode is on.
 
 ## State Values & Severity
 
-**Standard status strings** (`helpers.STATES`):
-- Severity order (worst to least): `DISASTER > CRITICAL > DOWN > HIGH > AVERAGE > WARNING > UNKNOWN > INFORMATION > UP`
-- Different servers use different names; always normalize to above set
-- Example: Zabbix "Disaster" → `DISASTER`, Prometheus AlertManager severity mapping in `map_to_*` fields
+`STATES` in `Nagstamon/helpers.py:41` is ordered from best to worst by list index (higher index = worse):
+
+```
+UP < UNKNOWN < INFORMATION < WARNING < AVERAGE < HIGH < CRITICAL < DISASTER < UNREACHABLE < DOWN
+```
+
+Different monitoring systems use different names; always normalize to this set (e.g. Zabbix "Disaster" → `DISASTER`). Sounds exist only for `STATES_SOUND` = WARNING, CRITICAL, DOWN.
+
+## Build, Run and Test Commands
+
+**Run locally** (needs a display and the dependencies from `build/requirements/linux.txt`):
+
+```bash
+python3 nagstamon.py
+```
+
+**Tests:**
+
+```bash
+python3 -m pytest tests/
+# or without pytest:
+python3 -m unittest discover -s tests
+```
+
+Note: `tests/test_alertmanager.py` requires `pylint` installed (it lints `Nagstamon/servers/Alertmanager` as part of the test). The smoke tests only need the runtime dependencies importable.
+
+**Release builds** are driven by `build/build.py` (run from inside `build/`):
+
+- Windows: PyInstaller → InnoSetup `setup.exe` (optional Authenticode signing when `WIN_SIGNING_CERT_BASE64`/`WIN_SIGNING_PASSWORD` env vars are set). Pass `debug` as first arg for a console build.
+- macOS: PyInstaller (`macos/nagstamon.spec`) → `.app` bundle → DMG via `create-dmg`.
+- Linux Debian/Ubuntu: copies `build/debian/` to repo root, runs `fakeroot debian/rules build/binary`.
+- Linux Fedora/RHEL: `python3 setup.py bdist_rpm`.
+- Linux Arch: `makepkg -f` inside `build/arch/` — builds from the local checkout (no tarball), installs via `python setup.py install`; binary lands as `/usr/bin/nagstamon`.
+
+## Testing Strategy
+
+Two test files, both unittest-based (pytest-compatible):
+
+1. **`tests/test_smoke.py`** — dynamically generates one test per `.py` file in `Nagstamon/`:
+   - Non-GUI modules (servers, config, helpers, objects, cookies, thirdparty API wrappers): fully imported via `importlib` — catches syntax *and* runtime import errors.
+   - GUI modules (`Nagstamon/qui/**`): syntax-checked only via `py_compile` — they need Qt and a display, unavailable in headless CI.
+   - Vendored Xlib (`Nagstamon/thirdparty/Xlib`, `ewmh`): syntax-checked only — import can clash with a system python-xlib.
+2. **`tests/test_alertmanager.py`** — real unit tests for the Alertmanager server using recorded JSON fixtures (`tests/test_alertmanager_*.json`), plus a pylint run over the Alertmanager package.
+
+There are no GUI-level tests. When changing server status parsing, run the smoke tests and add a fixture-based unit test like the Alertmanager ones if feasible.
 
 ## Important Conventions
 
-1. **No circular imports**: GUI modules import server/config; config/servers must NOT import gui. Break cycles via local imports if needed.
-2. **Lock mechanism**: Single-instance check at startup via `lock_config_folder()` prevents concurrent runs on same config
-3. **Thread lifecycle**: Servers run in update threads; status fetching must be thread-safe, avoid gui imports
-4. **Debug infrastructure**: Use `self.debug(server=name, debug=msg)` for logging, routed to `debug_queue` if enabled
-5. **Error handling**: Catch exceptions in `get_status()`, return `Result(result=result_code, error=error_msg)` for graceful degradation
+1. **No circular imports**: GUI modules import servers/config; config and servers must NOT import `Nagstamon.qui` (importing it initializes Qt). Break cycles with local imports if unavoidable.
+2. **Thread safety**: servers run in background update threads; status fetching code must not touch GUI objects.
+3. **License headers**: every source file carries the GPLv2 header ("Nagstamon - Nagios status monitor for your desktop / Copyright (C) 2008-2026 Henri Wahl..."). Keep it in new files.
+4. **Encoding comment**: server modules start with `# encoding: utf-8`.
+5. **Single-instance lock**: startup acquires `lock_config_folder(conf.configdir)`; only one instance per config folder may run.
+6. **Cross-platform handling**: branch on `OS`, `OS_WINDOWS`, `OS_MACOS` from `Nagstamon.config`; desktop quirks via `DESKTOP_WAYLAND` / `DESKTOP_NEEDS_FIX`. Keyring support is optional and disabled on some KDE+Ubuntu combinations to avoid segfaults.
+7. **Style**: 4-space indentation, `snake_case`, string formatting mostly via `format()`/f-strings. Pylint config only enforces errors (R/C/W disabled), so match the surrounding code's idioms rather than inventing new ones.
+8. **PyQt6 aborts on unhandled slot exceptions**: any exception escaping a `@Slot()` invoked from C++ (e.g. a worker's `get_status`) kills the process with SIGABRT. Server code must return `Result(result=..., error=...)` instead of raising — `GenericServer.get_status()` and the treeview worker already guard this; keep it that way.
+9. **Clean QThread shutdown**: before quitting, clear the worker's `running` flag, emit `finish`, then `quit()`+`wait()` the thread (pattern: `StatusWindow.exit()`). Qt aborts at interpreter exit if a `QThread` is destroyed while running. SIGTERM/SIGINT are handled in `nagstamon.py` via `QTimer.singleShot` deferral; a periodic no-op `QTimer` keeps Python signal handlers responsive inside the Qt loop.
+10. **No native `QFileDialog` on KDE**: do not instantiate `QFileDialog()` eagerly or natively — the KDE platform theme's KFileWidget runs KIO jobs whose completion posts a spurious `QEvent::Quit` that shuts the app down. Use static `QFileDialog.getOpenFileName(..., options=QFileDialog.Option.DontUseNativeDialog)` at the point of use.
 
 ## Key Files Reference
 
-- `Nagstamon/config.py` (1248 lines): AppInfo, OS detection, conf singleton, RESOURCES paths
-- `Nagstamon/servers/Generic.py` (1800 lines): Base class with HTTP handling, status aggregation, action methods
-- `Nagstamon/servers/__init__.py`: Plugin registration, server instantiation, aggregation functions
-- `Nagstamon/objects.py`: `GenericHost`/`GenericService` domain models
-- `Nagstamon/qui/__init__.py`: Qt app initialization, system tray setup
-- `Nagstamon/helpers.py`: Filtering (regex), STATES constant, utilities
+- `Nagstamon/config.py` — `AppInfo`, OS detection, `conf` singleton, resources paths
+- `Nagstamon/servers/Generic.py` — base server: HTTP, auth, TLS, filtering, actions, status aggregation
+- `Nagstamon/servers/__init__.py` — plugin registration (`SERVER_TYPES`, `register_server()`), `create_server()`, aggregation helpers (`get_worst_status()`, `get_status_count()`)
+- `Nagstamon/objects.py` — `GenericHost` / `GenericService` models
+- `Nagstamon/helpers.py` — `STATES`, filters, `lock_config_folder()`, `get_distro()`
+- `Nagstamon/qui/__init__.py` — Qt app initialization, systray setup
+- `Nagstamon/qui/dialogs/server.py` — per-server-type settings dialog (`VOLATILE_WIDGETS`)
 
 ## Debugging Tips
 
-1. Enable debug mode in config to see server refresh logs
-2. Check `nagstamon.conf` for server credentials and URLs
-3. Use `python -c "import Nagstamon.servers.YourServer; print('OK')"` to test server module imports
-4. GUI breakpoints require Qt event loop; print debugging more reliable
-5. Check for `ClassServerReal` pattern—some servers proxy to real implementation after detection
+1. Enable debug mode in the settings (or `conf.debug_mode`) to see per-server refresh logs.
+2. Config lives in `nagstamon.conf` under the platform config dir (server URLs, credentials — may use the OS keyring).
+3. Quick import check for a server module: `python3 -c "import Nagstamon.servers.YourServer; print('OK')"`.
+4. GUI debugging requires a running Qt event loop and a display; print/debug-queue logging is more reliable than breakpoints.
 
+## Security Considerations
+
+- Server credentials are stored in the OS keyring when available (kwallet/SecretService/macOS/Windows backends); plain-text fallback lives in the user config file — never log or commit config files.
+- `nagstamon.py` injects `truststore` into SSL early so the OS trust store is used; per-server TLS options (custom CA, ignore verification) exist in config.
+- `SECURITY.md` describes the vulnerability reporting process; CI runs CodeQL (`.github/workflows/codeql.yml`).
+- Windows release binaries are code-signed only when the signing env vars are present.
