@@ -103,15 +103,21 @@ class IcingaWeb2Server(GenericServer):
                 if login.error == '' and login.status_code == 200:
                     form = login.result.find('form')
                     form_inputs = {}
-                    for form_input in ('redirect', 'formUID', 'CSRFToken', 'btn_submit'):
-                        if form is not None and not form.find('input', {'name': form_input}) is None:
-                            # use .get() because some login pages provide input elements without value attribute
-                            form_inputs[form_input] = form.find('input', {'name': form_input}).get('value', '')
-                        else:
-                            form_inputs[form_input] = ''
+                    if form is not None:
+                        # collect all hidden fields (CSRFToken, uid, redirect, rememberme, ...)
+                        # instead of a hardcoded list - newer Icinga Web 2 versions added
+                        # mandatory fields like 'uid'
+                        for form_input in form.find_all('input'):
+                            if form_input.get('type') == 'hidden' and form_input.get('name'):
+                                form_inputs[form_input['name']] = form_input.get('value', '')
+                        # include the submit button - newer Icinga Web 2 versions reject
+                        # logins without it ('submit_login', formerly 'btn_submit')
+                        for form_submit in form.find_all(['button', 'input'], {'type': 'submit'}):
+                            if form_submit.get('name'):
+                                form_inputs[form_submit['name']] = form_submit.get('value', '')
                     form_inputs['username'] = self.username
                     form_inputs['password'] = self.password
-    
+
                     # fire up login button with all needed data
                     self.fetch_url('{0}/authentication/login'.format(self.monitor_url), cgi_data=form_inputs)
 

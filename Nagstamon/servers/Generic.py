@@ -962,6 +962,10 @@ class GenericServer:
         except Exception:
             self.isChecking = False
             result, error = self.error(sys.exc_info())
+            # reflect the error on the server object too, otherwise the GUI
+            # would treat the failed check as an 'everything is OK' result
+            self.status = 'ERROR'
+            self.status_description = error
             return Result(result=result, error=error)
 
         if status is not None:
@@ -1009,6 +1013,10 @@ class GenericServer:
                     except Exception:
                         self.isChecking = False
                         result, error = self.error(sys.exc_info())
+                        # reflect the error on the server object too, otherwise the GUI
+                        # would treat the failed check as an 'everything is OK' result
+                        self.status = 'ERROR'
+                        self.status_description = error
                         return Result(result=result, error=error)
                     self.status = status.result
                     self.status_description = status.error

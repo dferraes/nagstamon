@@ -1134,6 +1134,10 @@ class TreeView(QTreeView):
                         status = self.server.get_status()
                     except Exception:
                         status = Result(result='ERROR', error=format_exc())
+                        # reflect the error on the server object too, otherwise it
+                        # would look like an 'everything is OK' result below
+                        self.server.status = 'ERROR'
+                        self.server.status_description = status.error
 
                     # all is OK if no error info came back
                     if self.server.status_description == '' and \

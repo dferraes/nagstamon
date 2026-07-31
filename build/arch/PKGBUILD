@@ -3,7 +3,7 @@
 
 pkgname=nagstamon
 pkgver=3.19.20260527
-pkgrel=1
+pkgrel=2
 pkgdesc='Nagios status monitor for the desktop (local build with Plasma 6 fixes)'
 arch=('any')
 url='https://nagstamon.de/'
