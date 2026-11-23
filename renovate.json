@@ -4,7 +4,8 @@
     "config:recommended"
   ],
   "baseBranchPatterns": [
-    "develop"
+    "develop",
+    "master"
   ],
   "forkProcessing": "enabled",
   "dependencyDashboard": true,
