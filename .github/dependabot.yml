@@ -1,0 +1,15 @@
+# Las actualizaciones se integran en develop y llegan a main mediante promoción.
+version: 2
+updates:
+- package-ecosystem: github-actions
+  directory: /
+  target-branch: develop
+  schedule:
+    interval: weekly
+  open-pull-requests-limit: 2
+- package-ecosystem: github-actions
+  directory: /
+  target-branch: main
+  schedule:
+    interval: weekly
+  open-pull-requests-limit: 2

@@ -1,0 +1,24 @@
+name: Develop promotion
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+
+permissions: {}
+
+jobs:
+  source:
+    name: Promote from develop
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify source branch and repository
+        env:
+          SOURCE_BRANCH: ${{ github.event.pull_request.head.ref }}
+          SOURCE_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          if [[ "$SOURCE_BRANCH" != develop || "$SOURCE_REPOSITORY" != "$GITHUB_REPOSITORY" ]]; then
+            echo "::error::Production pull requests must come from develop in this repository."
+            exit 1
+          fi

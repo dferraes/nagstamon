@@ -55,5 +55,9 @@
       ],
       "groupName": "Docker base images"
     }
+  ],
+  "baseBranchPatterns": [
+    "develop",
+    "main"
   ]
 }
