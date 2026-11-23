@@ -199,7 +199,17 @@ jobs:
           architecture: x86
       #  no PyQt6 for win32 available on pypi.org
       - run: ((Get-Content -path build/requirements/windows.txt -Raw) -replace 'pyqt6.*','pyqt5') | Set-Content -Path build/requirements/windows.txt
-      - run: python -m pip install --no-warn-script-location -r build/requirements/windows.txt
+      # Current cryptography releases can fall back to a source build on Windows x86.
+      - name: Install x86 OpenSSL and Python dependencies
+        shell: pwsh
+        run: |
+          $vcpkg = $env:VCPKG_INSTALLATION_ROOT
+          $triplet = 'x86-windows-static-md'
+          & (Join-Path $vcpkg 'vcpkg.exe') install "openssl:${triplet}" --classic
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:OPENSSL_DIR = Join-Path $vcpkg "installed/$triplet"
+          $env:OPENSSL_STATIC = '1'
+          python -m pip install --no-warn-script-location -r build/requirements/windows.txt
       # pretty hacky but no other idea to avoid gssapi being installed which breaks requests-kerberos
       - run: python -m pip uninstall -y gssapi requests-gssapi
       - run: cd ${{ github.workspace }}/build; python build.py
