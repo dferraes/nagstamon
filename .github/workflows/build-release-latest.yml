@@ -26,6 +26,7 @@ jobs:
     - uses: actions/checkout@v6
     # docker login is needed for pushing the test image
     - uses: docker/login-action@v4
+      if: github.repository == 'HenriWahl/Nagstamon'
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
@@ -36,6 +37,7 @@ jobs:
     # if image defined by hash over requirements is not pullable aka does not exist it will be created and pushed
     - run: docker pull ${{ env.cr_image }}-${{ github.job }}-${{ matrix.python-version }}-${{ steps.requirements_hash.outputs.HASH }} || /usr/bin/docker build -t ${{ env.cr_image }}-${{ github.job }}-${{ matrix.python-version }}-${{ steps.requirements_hash.outputs.HASH }} --build-arg VERSION=${{ matrix.python-version }} --build-arg REQUIREMENTS="$(cat build/requirements/linux.txt | base64 --wrap=0)" -f build/docker/Dockerfile-${{ github.job }} .
     - run: docker push ${{ env.cr_image }}-${{ github.job }}-${{ matrix.python-version }}-${{ steps.requirements_hash.outputs.HASH }}
+      if: github.repository == 'HenriWahl/Nagstamon'
     # - name: Lint with flake8
     #   run: |
     #     # stop the build if there are Python syntax errors or undefined names
@@ -53,6 +55,7 @@ jobs:
       - uses: actions/checkout@v6
       # docker login is needed for pushing the build image
       - uses: docker/login-action@v4
+        if: github.repository == 'HenriWahl/Nagstamon'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -63,6 +66,7 @@ jobs:
       # if image defined by variable steps.dockerfile_hash.outputs.HASH is not pullable aka does not exist it will be created and pushed
       - run: docker pull ${{ env.cr_image }}-${{ github.job }}:${{ steps.dockerfile_hash.outputs.HASH }} || /usr/bin/docker build -t ${{ env.cr_image }}-${{ github.job }}:${{ steps.dockerfile_hash.outputs.HASH }} -f build/docker/Dockerfile-${{ github.job }} .
       - run: docker push ${{ env.cr_image }}-${{ github.job }}:${{ steps.dockerfile_hash.outputs.HASH }}
+        if: github.repository == 'HenriWahl/Nagstamon'
       # building in precompiled image makes them way faster instead of creating the build environment every time from scratch
       - run: /usr/bin/docker run -v ${{ github.workspace }}:/nagstamon -e DEB_BUILD_OPTIONS=nocheck ${{ env.cr_image }}-${{ github.job }}:${{ steps.dockerfile_hash.outputs.HASH }}
       - uses: actions/upload-artifact@v7
@@ -82,6 +86,7 @@ jobs:
       - uses: actions/checkout@v6
       # docker login is needed for pushing the build image
       - uses: docker/login-action@v4
+        if: github.repository == 'HenriWahl/Nagstamon'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -92,6 +97,7 @@ jobs:
       # if image defined by variable steps.dockerfile_hash.outputs.HASH is not pullable aka does not exist it will be created and pushed
       - run: docker pull ${{ env.cr_image }}-${{ github.job }}-${{ matrix.version }}:${{ steps.dockerfile_hash.outputs.HASH }} || /usr/bin/docker build -t ${{ env.cr_image }}-${{ github.job }}-${{ matrix.version }}:${{ steps.dockerfile_hash.outputs.HASH }} -f build/docker/Dockerfile-${{ github.job }}-${{ matrix.version }} .
       - run: docker push ${{ env.cr_image }}-${{ github.job }}-${{ matrix.version }}:${{ steps.dockerfile_hash.outputs.HASH }}
+        if: github.repository == 'HenriWahl/Nagstamon'
       # building in precompiled image makes them way faster instead of creating the build environment every time from scratch
       - run: /usr/bin/docker run -v ${{ github.workspace }}:/nagstamon ${{ env.cr_image }}-${{ github.job }}-${{ matrix.version }}:${{ steps.dockerfile_hash.outputs.HASH }}
       - uses: actions/upload-artifact@v7
@@ -108,6 +114,7 @@ jobs:
       - uses: actions/checkout@v6
       # docker login is needed for pushing the build image
       - uses: docker/login-action@v4
+        if: github.repository == 'HenriWahl/Nagstamon'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -118,6 +125,7 @@ jobs:
       # if image defined by variable steps.dockerfile_hash.outputs.HASH is not pullable aka does not exist it will be created and pushed
       - run: docker pull ${{ env.cr_image }}-${{ github.job }}:${{ steps.dockerfile_hash.outputs.HASH }} || /usr/bin/docker build -t ${{ env.cr_image }}-${{ github.job }}:${{ steps.dockerfile_hash.outputs.HASH }} -f build/docker/Dockerfile-${{ github.job }} .
       - run: docker push ${{ env.cr_image }}-${{ github.job }}:${{ steps.dockerfile_hash.outputs.HASH }}
+        if: github.repository == 'HenriWahl/Nagstamon'
       # building in precompiled image makes them way faster instead of creating the build environment every time from scratch
       - run: /usr/bin/docker run -v ${{ github.workspace }}:/nagstamon ${{ env.cr_image }}-${{ github.job }}:${{ steps.dockerfile_hash.outputs.HASH }}
       - uses: actions/upload-artifact@v7
@@ -135,6 +143,7 @@ jobs:
       - uses: actions/checkout@v6
       # docker login is needed for pushing the build image
       - uses: docker/login-action@v4
+        if: github.repository == 'HenriWahl/Nagstamon'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -147,6 +156,7 @@ jobs:
       # if image defined by variable steps.dockerfile_hash.outputs.HASH is not pullable aka does not exist it will be created and pushed
       - run: docker pull ${{ env.cr_image }}-${{ github.job }}:${{ steps.dockerfile_hash.outputs.HASH }} || /usr/bin/docker build -t ${{ env.cr_image }}-${{ github.job }}:${{ steps.dockerfile_hash.outputs.HASH }} -f build/docker/Dockerfile-${{ github.job }} .
       - run: docker push ${{ env.cr_image }}-${{ github.job }}:${{ steps.dockerfile_hash.outputs.HASH }}
+        if: github.repository == 'HenriWahl/Nagstamon'
       # building in precompiled image makes them way faster instead of creating the build environment every time from scratch
       - run: /usr/bin/docker run --volume ${{ github.workspace }}:/nagstamon --env VERSION=${{ steps.app_version.outputs.VERSION }} ${{ env.cr_image }}-${{ github.job }}:${{ steps.dockerfile_hash.outputs.HASH }}
       - uses: actions/upload-artifact@v7
@@ -175,7 +185,7 @@ jobs:
           name: ${{ github.job }}
 
   macos-arm:
-    runs-on: macos-14
+    runs-on: macos-15
     needs: test
     steps:
       - uses: actions/checkout@v6
@@ -203,7 +213,17 @@ jobs:
           architecture: x86
       #  no PyQt6 for win32 available on pypi.org
       - run: ((Get-Content -path build/requirements/windows.txt -Raw) -replace 'pyqt6.*','pyqt5') | Set-Content -Path build/requirements/windows.txt
-      - run: python -m pip install --no-warn-script-location -r build/requirements/windows.txt
+      # Current cryptography releases can fall back to a source build on Windows x86.
+      - name: Install x86 OpenSSL and Python dependencies
+        shell: pwsh
+        run: |
+          $vcpkg = $env:VCPKG_INSTALLATION_ROOT
+          $triplet = 'x86-windows-static-md'
+          & (Join-Path $vcpkg 'vcpkg.exe') install "openssl:${triplet}" --classic
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:OPENSSL_DIR = Join-Path $vcpkg "installed/$triplet"
+          $env:OPENSSL_STATIC = '1'
+          python -m pip install --no-warn-script-location -r build/requirements/windows.txt
       # pretty hacky but no other idea to avoid gssapi being installed which breaks requests-kerberos
       - run: python -m pip uninstall -y gssapi requests-gssapi
       - run: cd ${{ github.workspace }}/build; python build.py
@@ -275,6 +295,7 @@ jobs:
 
   # borrowed from dhcpy6d
   repo-debian:
+    if: github.repository == 'HenriWahl/Nagstamon'
     runs-on: ubuntu-latest
     # try to avoid race condition and start uploading only after the last install package has been build
     needs: [debian, fedora, linux-pyinstaller, macos-arm, macos-intel, rhel-9, windows-32, windows-64, windows-64-debug]
@@ -323,6 +344,7 @@ jobs:
       - run: cd ${{ env.repo_dir }} && git add . && git commit -am "new ${{ env.release }} repo ${{ env.family }}" && git push
 
   repo-rpm-fedora:
+    if: github.repository == 'HenriWahl/Nagstamon'
     runs-on: ubuntu-latest
     # if not all are ready there might be trouble when downloading artifacts
     # maybe faster now with build containers
@@ -342,6 +364,7 @@ jobs:
           merge-multiple: true
       # docker login is needed for pushing the build image
       - uses: docker/login-action@v4
+        if: github.repository == 'HenriWahl/Nagstamon'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -361,6 +384,7 @@ jobs:
       # only needed for fedora
       - run: docker pull ${{ env.cr_image }}-${{ env.family }}-${{ env.version_latest }}:${{ steps.dockerfile_hash.outputs.HASH }} || /usr/bin/docker build -t ${{ env.cr_image }}-${{ env.family }}-${{ env.version_latest }}:${{ steps.dockerfile_hash.outputs.HASH }} -f build/docker/Dockerfile-${{ env.family }}-${{ env.version_latest }} .
       - run: docker push ${{ env.cr_image }}-${{ env.family }}-${{ env.version_latest }}:${{ steps.dockerfile_hash.outputs.HASH }}
+        if: github.repository == 'HenriWahl/Nagstamon'
       # copy *.rpm files into nagstamon-jekyll and create repodata
       - run: |
             version=${{ env.release }} && \
@@ -375,6 +399,7 @@ jobs:
       - run: cd ${{ env.repo_dir }} && git pull && git add . && git commit -am "new latest repo ${{ env.family }}" && git push
 
   repo-rpm-rhel:
+    if: github.repository == 'HenriWahl/Nagstamon'
     runs-on: ubuntu-latest
     # if not all are ready there might be trouble when downloading artifacts
     # maybe faster now with build containers
@@ -417,6 +442,7 @@ jobs:
       - run: cd ${{ env.repo_dir }} && git pull && git add . && git commit -am "new latest repo ${{ env.family }}" && git push
 
   github-release:
+    if: github.repository == 'HenriWahl/Nagstamon'
     runs-on: ubuntu-latest
     needs: [repo-rpm-rhel]
     steps:
