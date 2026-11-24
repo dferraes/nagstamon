@@ -8,7 +8,9 @@
     "master"
   ],
   "forkProcessing": "enabled",
-  "dependencyDashboard": true,
+  "dependencyDashboard": {
+    "enabled": true
+  },
   "timezone": "America/Mexico_City",
   "schedule": [
     "before 6am on Monday"
@@ -17,8 +19,8 @@
     "dependencies"
   ],
   "pip_requirements": {
-    "fileMatch": [
-      "^build/requirements/.*\\.txt$"
+    "managerFilePatterns": [
+      "/^build/requirements/.*\\.txt$/"
     ]
   },
   "packageRules": [
@@ -27,10 +29,10 @@
       "matchManagers": [
         "pip_requirements"
       ],
-      "matchPackagePatterns": [
-        "^pyqt6"
-      ],
-      "groupName": "PyQt6"
+      "groupName": "PyQt6",
+      "matchPackageNames": [
+        "/^pyqt6/"
+      ]
     },
     {
       "description": "keyring is pinned on macOS due to problems since 24.x - propose but do not automerge",
