@@ -5,6 +5,7 @@
   ],
   "baseBranchPatterns": [
     "develop",
+    "main",
     "master"
   ],
   "forkProcessing": "enabled",
